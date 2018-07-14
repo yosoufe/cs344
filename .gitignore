@@ -22,7 +22,6 @@
 build
 bin
 
-**/build
-**/build/**
-**/build/
 */build
+**/build/
+
