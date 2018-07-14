@@ -1,3 +1,0 @@
-/home/yousof/Courses/cs344/Problem Sets/Problem Set 2/buid/CMakeFiles/rebuild_cache.dir
-/home/yousof/Courses/cs344/Problem Sets/Problem Set 2/buid/CMakeFiles/HW2.dir
-/home/yousof/Courses/cs344/Problem Sets/Problem Set 2/buid/CMakeFiles/edit_cache.dir
