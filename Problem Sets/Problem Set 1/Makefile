@@ -5,7 +5,7 @@ NVCC=nvcc
 # locations on most linux distros #
 ###################################
 
-OPENCV_LIBPATH=/usr/lib
+OPENCV_LIBPATH=/usr/local/lib
 OPENCV_INCLUDEPATH=/usr/include
 
 ###################################################
@@ -20,7 +20,7 @@ OPENCV_INCLUDEPATH=/usr/include
 #OPENCV_LIBPATH=/opt/local/lib
 #OPENCV_INCLUDEPATH=/opt/local/include
 
-OPENCV_LIBS=-lopencv_core -lopencv_imgproc -lopencv_highgui
+OPENCV_LIBS=-lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs
 
 CUDA_INCLUDEPATH=/usr/local/cuda/include
 
