@@ -22,7 +22,7 @@ link_libraries(${OpenCV_LIBS} ${CUDA_LIBRARIES})
 # add debugging to CUDA NVCC flags.  For NVidia's NSight tools.
 set(CUDA_NVCC_FLAGS_DEBUG ${CUDA_NVCC_FLAGS_DEBUG} "-G")
 set(CMAKE_CUDA_FLAGS "-arch=sm_61")
-#set(CUDA_SEPARABLE_COMPILATION ON)
+set(CUDA_SEPARABLE_COMPILATION ON)
 include_directories(${CUDA_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 
 
@@ -31,6 +31,7 @@ file( GLOB  cu  *.cu)
 set(project_files main.cpp reference_calc.cpp compare.cpp)
 
     
+#CUDA_ADD_EXECUTABLE(${PROJECT_NAME} ${HW2_files} ${hdr} ${cu})
 CUDA_ADD_EXECUTABLE(${PROJECT_NAME} ${project_files} ${hdr} ${cu})
-#ADD_EXECUTABLE(${PROJECT_NAME} ${project_files} ${hdr} ${cu})
-#target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${CUDA_LIBRARIES}) # ${CUDA_LIBRARIES}
+target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ) # ${CUDA_LIBRARIES}
+
