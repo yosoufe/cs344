@@ -12,7 +12,7 @@ Install OpenCV3 from [here](https://www.learnopencv.com/install-opencv3-on-ubunt
 I had to change all the makefiles to make compatible for opencv3 and my GPU.
 
 # Summary
-## Lesson 1
+## Lesson 1: Basic CUDA Programming
 ```
 nvcc -o sample sample.cu
 ```
@@ -40,3 +40,38 @@ kernelFunction<<<dim3, dim3, sharedMem >>>(...);
 cudaFree(d_pointer);
 
 ```
+
+## Lesson 2: Parallel Communication Pattern && Global/Shared/Local Memory
+Parallel Communication Patterns:
+* Map - One-to-One
+* Gather - Many-to-One
+* Scatter - One-to-Many
+* Stencil (Data reuse - shared pattern) - Several-to-One
+* Transpose (Scatter/Gather, Reorder) like transfering Array of structures (AoS) to structure of arrays (SoA) - One-to-One
+* reduce - Many-to-One
+* scan/sort - all-to-all
+
+```
+__shared__ int array[128];  // example of shared memory
+__synchthreads();           // make a barrier
+```
+
+Writing Efficient GPU Programs:
+* Maximise Arithmatic Density. (math ops/memory ops)
+* speed: local > shared >> global >> Host Memory
+* Parameters are local memory.
+* Coalesce Global Memory Accesses.
+* Avoid Thread Divergence
+
+```
+#include "gputimer.h"
+GpuTimer timer;
+timer.Start();
+timer.Stop();
+timer.Elapsed();
+```
+
+Atomic Memory Operation: `atomicAdd(); atomicMin(); atomicXOR(); atomicCAS(); ...`
+
+
+
