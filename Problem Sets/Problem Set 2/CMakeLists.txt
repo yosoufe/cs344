@@ -13,11 +13,10 @@ project(HW2)
 find_package(OpenCV REQUIRED)
 find_package(CUDA REQUIRED)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "../")
+
 set(CUDA_HOST_COMPILER "/usr/bin/gcc-6")
 link_libraries(${OpenCV_LIBS} ${CUDA_LIBRARIES})
-
-# add -Wextra compiler flag for gcc compilations
-#set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-Xcompiler -Wextra")
 
 # add debugging to CUDA NVCC flags.  For NVidia's NSight tools.
 set(CUDA_NVCC_FLAGS_DEBUG ${CUDA_NVCC_FLAGS_DEBUG} "-G")
@@ -30,7 +29,4 @@ file( GLOB  hdr *.hpp *.h )
 file( GLOB  cu  *.cu)
 set(project_files main.cpp reference_calc.cpp compare.cpp)
 
-    
 CUDA_ADD_EXECUTABLE(${PROJECT_NAME} ${project_files} ${hdr} ${cu})
-#ADD_EXECUTABLE(${PROJECT_NAME} ${project_files} ${hdr} ${cu})
-#target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${CUDA_LIBRARIES}) # ${CUDA_LIBRARIES}
