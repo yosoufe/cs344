@@ -64,6 +64,7 @@ Writing Efficient GPU Programs:
 * Avoid Thread Divergence
 
 ```
+// defined by this course. Not in CUDA
 #include "gputimer.h"
 GpuTimer timer;
 timer.Start();
@@ -73,5 +74,34 @@ timer.Elapsed();
 
 Atomic Memory Operation: `atomicAdd(); atomicMin(); atomicXOR(); atomicCAS(); ...`
 
+## Lesson 3: Analyse Speed & Efficiency && Reduce, Scan, Histogram
+New Terms:
+* Step Complexity
+* Work Complexity
 
+### Reduce:
+Inputs to REDUCE:
+1. Set of Elements
+2. Operator:
+  a. Binary
+  b. Associative
 
+### External Shared Memory:
+```
+// inside the kernel:
+extern __shared__ float sharedData[];
+
+// Launch the kernel with the externally defined shared memory
+ sharedMem_kernel<<<blocks, threads, size>>>(...);
+```
+
+### Scan:
+Example:
+Imput:  1 2 3 4
+Operation: Add
+Output: 0 1 3 6 10
+
+Inputs to SCAN:
+* Input Array
+* Binary Associative Operator
+* Identity Element
