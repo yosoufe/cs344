@@ -95,7 +95,7 @@ extern __shared__ float sharedData[];
  sharedMem_kernel<<<blocks, threads, size>>>(...);
 ```
 
-### Scan:
+### Exclusive/Inclusive Scan:
 Example:
 Imput:  1 2 3 4
 Operation: Add
@@ -105,3 +105,10 @@ Inputs to SCAN:
 * Input Array
 * Binary Associative Operator
 * Identity Element
+
+Implementations:
+* Hillis/Steele Inclusive Scan: Step: log n, work: n*log n
+* Blelloch Scan: Step: 2*log n, work: 2*log n
+
+
+
