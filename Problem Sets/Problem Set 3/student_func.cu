@@ -80,6 +80,24 @@
 */
 
 #include "utils.h"
+#include "stdio.h"
+
+// sample of REDUCE pattern in CUDA for min and max operation
+__global__
+void findMinMax(const float* const d_logLuminance,
+                float *minMax,
+                int logLuminance_size){
+
+  extern __shared__ float sh_LogLum[];
+
+  const int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  if (idx >= logLuminance_size) return;
+
+  // copy data to the shared memory from the global memory
+  sh_LogLum[idx] = d_logLuminance[idx];
+  __syncthreads();
+
+}
 
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
@@ -100,5 +118,24 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
 
+  /******* 1) find the minimum and maximum *********/
+  // a) declare the GPU and CPU memory for min and max
+  float h_MinMax[2];
+  float *d_MinMax; // d_MinMax[0] = min, d_MinMax[1] = max;
+//  checkCudaErrors(cudaMalloc((void **) &d_MinMax, sizeof(float) * 2));
+
+  const int arraySize = numRows * numCols;
+  const int maxThreadPerBlock = 1024;
+  std::cout << arraySize << std::endl;
+//  dim3 gridSize(maxThreadPerBlock);
+//  dim3 blockSize(arraySize/maxThreadPerBlock);
+//  findMinMax<<<blockSize,gridSize,arraySize*sizeof(float)>>>(d_logLuminance,
+//                                                             d_MinMax,
+//                                                             arraySize);
+
+//  cudaDeviceSynchronize();
+//  cudaMemcpy(h_MinMax,d_MinMax,2*sizeof(float),cudaMemcpyDeviceToHost);
+//  checkCudaErrors(cudaGetLastError());
+//  min_logLum = h_MinMax[0]; max_logLum = h_MinMax[1];
 
 }
