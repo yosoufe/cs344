@@ -28,3 +28,6 @@ bin
 CMakeLists.txt.user
 **/CMakeLists.txt.user
 
+**/CMakeFiles
+**/Project.cbp
+
