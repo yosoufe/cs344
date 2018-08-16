@@ -5,14 +5,14 @@
 # <email>   quantm@unist.ac.kr  kast.jo@googlemail.com msarahan@gmail.com</email>
 ############################################################################
 # minimum required cmake version
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.8)
 find_package(CUDA QUIET REQUIRED)
+#project(HW3)
 
-set(CUDA_HOST_COMPILER /usr/local/cuda/bin/gcc)
+#set(CUDA_HOST_COMPILER /usr/local/cuda/bin/gcc)
 set(CMAKE_BUILD_TYPE Debug)
 
 find_package( OpenCV REQUIRED )
-
 
 SET (compare_files compare.cpp)
 

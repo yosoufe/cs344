@@ -4,26 +4,15 @@
 # <author>  Quan Tran Minh. edit by Johannes Kast, Michael Sarahan </author>
 # <email>   quantm@unist.ac.kr  kast.jo@googlemail.com msarahan@gmail.com</email>
 ############################################################################
-
-# collect source files
-
+# minimum required cmake version
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
-project(HW2)
+find_package(CUDA QUIET REQUIRED)
+#project(HW2)
 
-find_package(OpenCV REQUIRED)
-find_package(CUDA REQUIRED)
+#set(CUDA_HOST_COMPILER /usr/local/cuda/bin/gcc)
+set(CMAKE_BUILD_TYPE Debug)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "../")
-
-set(CUDA_HOST_COMPILER "/usr/bin/gcc-6")
-link_libraries(${OpenCV_LIBS} ${CUDA_LIBRARIES})
-
-# add debugging to CUDA NVCC flags.  For NVidia's NSight tools.
-set(CUDA_NVCC_FLAGS_DEBUG ${CUDA_NVCC_FLAGS_DEBUG} "-G")
-set(CMAKE_CUDA_FLAGS "-arch=sm_61")
-#set(CUDA_SEPARABLE_COMPILATION ON)
-include_directories(${CUDA_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
-
+find_package( OpenCV REQUIRED )
 
 file( GLOB  hdr *.hpp *.h )
 file( GLOB  cu  *.cu)
