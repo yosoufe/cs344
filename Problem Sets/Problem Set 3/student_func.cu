@@ -81,22 +81,60 @@
 
 #include "utils.h"
 #include "stdio.h"
+#include <float.h>
 
 // sample of REDUCE pattern in CUDA for min and max operation
 __global__
 void findMinMax(const float* const d_logLuminance,
-                float *minMax,
+                float *min, float *max,
                 int logLuminance_size){
 
-  extern __shared__ float sh_LogLum[];
+  extern __shared__ float s_var[];
+  //extern __shared__ float s_min[];
+//  if (gridDim.x != 384 || blockDim.x != 1024)
+//    printf(" gridDim.x %d, blockDim.x %d, block.x %d, thread.x %d \n", gridDim.x, blockDim.x, blockIdx.x, threadIdx.x);
+  float* s_min = (float *) s_var;
+  float* s_max = (float *) &s_min[blockDim.x];
 
   const int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  const int tid = threadIdx.x;
   if (idx >= logLuminance_size) return;
 
   // copy data to the shared memory from the global memory
-  sh_LogLum[idx] = d_logLuminance[idx];
+  s_min[tid] = d_logLuminance[idx];
+  s_max[tid] = d_logLuminance[idx];
   __syncthreads();
 
+
+  for (int stride = blockDim.x/2; stride > 0; stride >>= 1){
+    if (tid < stride){
+      s_min[tid] = fminf(s_min[tid], s_min[tid+stride]);
+      s_max[tid] = fmaxf(s_max[tid], s_max[tid+stride]);
+    }
+  }
+  if(tid == 0){
+    min[blockIdx.x] = s_min[0];
+    max[blockIdx.x] = s_max[0];
+  }
+  __syncthreads();
+//  // how many elements in min max are valid:
+//  // arraysize/1024 = gridDim.x
+  if(tid>=gridDim.x)return;
+  s_min[tid] = min[tid];
+  s_max[tid] = max[tid];
+  __syncthreads();
+  for(int s = gridDim.x ; s > 1; ){
+    if (s%2 == 0 ) s/=2;
+    else s = s/2+1;
+    if (tid<s){
+      s_min[tid] = fminf(s_min[tid], s_min[tid+s]);
+      s_max[tid] = fmaxf(s_max[tid], s_max[tid+s]);
+    }
+  }
+  if (tid == 0 ){
+    min[0] = fminf(s_min[0],s_min[1]);
+    max[0] = fmaxf(s_max[0],s_max[1]);
+  }
 }
 
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
@@ -120,22 +158,72 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 
   /******* 1) find the minimum and maximum *********/
   // a) declare the GPU and CPU memory for min and max
-  float h_MinMax[2];
-  float *d_MinMax; // d_MinMax[0] = min, d_MinMax[1] = max;
-//  checkCudaErrors(cudaMalloc((void **) &d_MinMax, sizeof(float) * 2));
 
-  const int arraySize = numRows * numCols;
+
   const int maxThreadPerBlock = 1024;
-  std::cout << arraySize << std::endl;
-//  dim3 gridSize(maxThreadPerBlock);
-//  dim3 blockSize(arraySize/maxThreadPerBlock);
-//  findMinMax<<<blockSize,gridSize,arraySize*sizeof(float)>>>(d_logLuminance,
-//                                                             d_MinMax,
-//                                                             arraySize);
+  const int arraySize = numRows * numCols;
+  std::cout << "array size: " << arraySize << std::endl;
 
-//  cudaDeviceSynchronize();
-//  cudaMemcpy(h_MinMax,d_MinMax,2*sizeof(float),cudaMemcpyDeviceToHost);
-//  checkCudaErrors(cudaGetLastError());
+  float originalData[arraySize];
+  cudaMemcpy(originalData,d_logLuminance,arraySize*sizeof(float),cudaMemcpyDeviceToHost);
+
+
+
+  float *d_Min;
+  float *d_Max;
+  checkCudaErrors(cudaMalloc((void **) &d_Min, sizeof(float) * arraySize));
+  checkCudaErrors(cudaMalloc((void **) &d_Max, sizeof(float) * arraySize));
+
+
+  dim3 blockWidth(maxThreadPerBlock);
+  dim3 nOfBlocks(arraySize/maxThreadPerBlock);
+  findMinMax<<<nOfBlocks,blockWidth,2*maxThreadPerBlock*sizeof(float)>>>(d_logLuminance,
+                                                                       d_Min,d_Max,
+                                                                       arraySize);
+  checkCudaErrors(cudaGetLastError());
+  cudaDeviceSynchronize();
+  checkCudaErrors(cudaGetLastError());
+  float* h_min = (float*) malloc(int(arraySize/maxThreadPerBlock) * sizeof(float));
+  float* h_max = (float*) malloc(int(arraySize/maxThreadPerBlock) * sizeof(float));
+//  float h_min[384];
+//  float h_max[384];
+
+  cudaMemcpy(h_min,d_Min,sizeof(float)*int(arraySize/maxThreadPerBlock),cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_max,d_Max,sizeof(float)*int(arraySize/maxThreadPerBlock),cudaMemcpyDeviceToHost);
+
+
+  float cpu_min = FLT_MAX;
+  float gpu_min = FLT_MAX;
+  float cpu_max = FLT_MAX * (-1);
+  float gpu_max = FLT_MAX * (-1);
+  int max_idx, min_idx;
+  for (int i = 0; i < arraySize; i++){
+    if (originalData[i] < cpu_min) cpu_min = originalData[i];
+    if (originalData[i] > cpu_max) cpu_max = originalData[i];
+  }
+  for (int i = 0; i < arraySize/maxThreadPerBlock; i++){
+    if (h_min[i] < gpu_min) {
+      gpu_min = h_min[i];
+      min_idx = i;
+    }
+    if (h_max[i] > gpu_max) {
+      gpu_max = h_max[i];
+      max_idx = i;
+    }
+  }
+
+  std::cout << "min: CPU: " << cpu_min << " GPU: " <<
+               h_min[0] << " GPU2: " << gpu_min << " at: " << min_idx << std::endl;
+  std::cout << "max: CPU: " << cpu_max << " GPU: " <<
+               h_max[0] << " GPU2: " << gpu_max << " at: " << max_idx << std::endl;
+
+  checkCudaErrors(cudaGetLastError());
+  cudaFree(d_Min);
+  cudaFree(d_Max);
+  delete h_min;
+  delete h_max;
+
+  // calculate the min for first 1024 elements to check
 //  min_logLum = h_MinMax[0]; max_logLum = h_MinMax[1];
 
 }

@@ -53,6 +53,8 @@ Parallel Communication Patterns:
 
 ```
 __shared__ int array[128];  // example of shared memory
+// Shared memory is shared between the threads of a block and 
+// it only survives when the block is alive.
 __synchthreads();           // make a barrier
 ```
 
