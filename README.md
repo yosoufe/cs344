@@ -3,13 +3,24 @@ cs344
 
 Introduction to Parallel Programming class code
 
-# Building on OS X
+# Requirements (Ubuntu 18.04)
 
-These instructions are for OS X 10.9 "Mavericks".
-
-Install OpenCV3 from [here](https://www.learnopencv.com/install-opencv3-on-ubuntu/).
-
-I had to change all the makefiles to make compatible for opencv3 and my GPU.
+* OpenCV3 ([Installation](https://www.learnopencv.com/install-opencv3-on-ubuntu/))
+* CUDA 9.0 ([Installation and Documentation](https://developer.nvidia.com/cuda-toolkit-archive), [Installation Guide](https://github.com/markjay4k/Install-Tensorflow-on-Ubuntu-17.10-/blob/master/Tensorflow%20Install%20instructions.ipynb))
+* CMake
+* GCC-6
+```
+sudo apt install gcc-6 g++-6
+sudo ln -s /usr/bin/gcc-6 /usr/local/cuda/bin/gcc 
+sudo ln -s /usr/bin/g++-6 /usr/local/cuda/bin/g++
+```
+```
+git clone https://github.com/yosoufe/cs344.git
+cd cs344
+mkdir build && cd build
+cmake ..
+make
+```
 
 # Summary
 ## Lesson 1: Basic CUDA Programming
@@ -112,5 +123,8 @@ Implementations:
 * Hillis/Steele Inclusive Scan: Step: log n, work: n*log n
 * Blelloch Scan: Step: 2*log n, work: 2*log n
 
-
+### Histogram:
+* Use Atomic Add, or
+* Local Histogram for each thread and then reduce all local histograms, or
+* Sort then reduce by key.
 
