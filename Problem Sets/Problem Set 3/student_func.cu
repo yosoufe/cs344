@@ -1,4 +1,4 @@
-/* Udacity Homework 3
+﻿/* Udacity Homework 3
    HDR Tone-mapping
 
   Background HDR
@@ -137,8 +137,38 @@ void findMinMax(const float* const d_logLuminance,
   }
 }
 
+__global__
+void calculate_cdf(const float* const d_logLuminance,
+                   float const min, float const max, float const range,
+                   unsigned int* const d_cdf,  unsigned int* const d_hist,
+                   size_t const numBins,
+                   unsigned int const logLuminance_size)
+{
+  const int idx = threadIdx.x + blockIdx.x * blockDim.x;
+//  const int tid = threadIdx.x;
+  if (idx >= logLuminance_size) return;
+
+  if (idx < numBins) {
+    d_hist[idx] = 0;
+    d_cdf[idx] = 0;
+  }
+
+  // Calculate Histogram
+  // bin = (lum[i] - lumMin) / lumRange * numBins
+  unsigned int bin = (d_logLuminance[idx] - min) / range * numBins;
+  if (bin < numBins) atomicAdd(&d_hist[bin], 1);
+
+  __syncthreads();
+
+  // calculate the cfd
+  if (idx >= numBins) return;
+  for (int i = 0; i < idx; i++){
+    d_cdf[idx] += d_hist[i];
+  }
+}
+
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
-                                  unsigned int* const d_cdf,
+                                  unsigned int* const d_cdf, // cumulative distribution funciton
                                   float &min_logLum,
                                   float &max_logLum,
                                   const size_t numRows,
@@ -157,24 +187,16 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        incoming d_cdf pointer which already has been allocated for you)       */
 
   /******* 1) find the minimum and maximum *********/
-  // a) declare the GPU and CPU memory for min and max
-
-
   const int maxThreadPerBlock = 1024;
   const int arraySize = numRows * numCols;
   std::cout << "array size: " << arraySize << std::endl;
 
   float originalData[arraySize];
   cudaMemcpy(originalData,d_logLuminance,arraySize*sizeof(float),cudaMemcpyDeviceToHost);
-
-
-
   float *d_Min;
   float *d_Max;
   checkCudaErrors(cudaMalloc((void **) &d_Min, sizeof(float) * arraySize));
   checkCudaErrors(cudaMalloc((void **) &d_Max, sizeof(float) * arraySize));
-
-
   dim3 blockWidth(maxThreadPerBlock);
   dim3 nOfBlocks(arraySize/maxThreadPerBlock);
   findMinMax<<<nOfBlocks,blockWidth,2*maxThreadPerBlock*sizeof(float)>>>(d_logLuminance,
@@ -183,15 +205,22 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
   checkCudaErrors(cudaGetLastError());
   cudaDeviceSynchronize();
   checkCudaErrors(cudaGetLastError());
+  float h_min, h_max;
+  cudaMemcpy(&h_min,d_Min,sizeof(float),cudaMemcpyDeviceToHost);
+  cudaMemcpy(&h_max,d_Max,sizeof(float),cudaMemcpyDeviceToHost);
+  checkCudaErrors(cudaGetLastError());
+
+  cudaFree(d_Min);
+  cudaFree(d_Max);
+
+  min_logLum = h_min;
+  max_logLum = h_max;
+
+  /* To check the correctness of the GPU implementation:
   float* h_min = (float*) malloc(int(arraySize/maxThreadPerBlock) * sizeof(float));
   float* h_max = (float*) malloc(int(arraySize/maxThreadPerBlock) * sizeof(float));
-//  float h_min[384];
-//  float h_max[384];
-
   cudaMemcpy(h_min,d_Min,sizeof(float)*int(arraySize/maxThreadPerBlock),cudaMemcpyDeviceToHost);
   cudaMemcpy(h_max,d_Max,sizeof(float)*int(arraySize/maxThreadPerBlock),cudaMemcpyDeviceToHost);
-
-
   float cpu_min = FLT_MAX;
   float gpu_min = FLT_MAX;
   float cpu_max = FLT_MAX * (-1);
@@ -216,14 +245,26 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
                h_min[0] << " GPU2: " << gpu_min << " at: " << min_idx << std::endl;
   std::cout << "max: CPU: " << cpu_max << " GPU: " <<
                h_max[0] << " GPU2: " << gpu_max << " at: " << max_idx << std::endl;
-
-  checkCudaErrors(cudaGetLastError());
-  cudaFree(d_Min);
-  cudaFree(d_Max);
   delete h_min;
   delete h_max;
+  */
 
-  // calculate the min for first 1024 elements to check
-//  min_logLum = h_MinMax[0]; max_logLum = h_MinMax[1];
+  // Calculate the range
+  float lumRange = h_max - h_min;
+  std::cout << "min: " << h_min << ", max: " << h_max << std::endl;
 
+  // memory allocation for histogram:
+  unsigned int* d_hist;
+  cudaMalloc((void **)&d_hist, sizeof (unsigned int) * numBins);
+
+  // generate the cumulative distribution funciton d_cdf
+  calculate_cdf<<<nOfBlocks,blockWidth>>>(d_logLuminance,
+                                          min_logLum,max_logLum,lumRange,
+                                          d_cdf,d_hist,
+                                          numBins,
+                                          arraySize);
+
+  checkCudaErrors(cudaGetLastError());
+  cudaDeviceSynchronize();
+  checkCudaErrors(cudaGetLastError());
 }
