@@ -98,13 +98,16 @@ int main(int argc, char **argv) {
   float *h_luminance = (float *) malloc(sizeof(float)*numRows*numCols);
   unsigned int *h_cdf = (unsigned int *) malloc(sizeof(unsigned int)*numBins);
 
+  unsigned int *h_cdf_gpu_res = (unsigned int *) malloc(sizeof(unsigned int)*numBins);
+  checkCudaErrors(cudaMemcpy(h_cdf_gpu_res, d_cdf, sizeof(unsigned int) * numBins, cudaMemcpyDeviceToHost));
+
   checkCudaErrors(cudaMemcpy(h_luminance, d_luminance, numRows*numCols*sizeof(float), cudaMemcpyDeviceToHost));
 
   //check results and output the tone-mapped image
   postProcess(output_file, numRows, numCols, min_logLum, max_logLum);
 
   for (size_t i = 1; i < numCols * numRows; ++i) {
-	min_logLum = std::min(h_luminance[i], min_logLum);
+    min_logLum = std::min(h_luminance[i], min_logLum);
     max_logLum = std::max(h_luminance[i], max_logLum);
   }
 
@@ -112,6 +115,11 @@ int main(int argc, char **argv) {
 
   checkCudaErrors(cudaMemcpy(d_cdf, h_cdf, sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
 
+  for( int i = 0; i < numBins; i++){
+    if (h_cdf[i] != h_cdf_gpu_res[i])
+      std::cout << i << ": " << "CPU: "  << h_cdf[i] << " GPU: " << h_cdf_gpu_res[i] << " Difference: " << h_cdf[i] - h_cdf_gpu_res[i] << std::endl;
+  }
+  delete h_cdf_gpu_res;
   //check results and output the tone-mapped image
   postProcess(reference_file, numRows, numCols, min_logLum, max_logLum);
 

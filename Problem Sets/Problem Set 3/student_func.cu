@@ -138,32 +138,45 @@ void findMinMax(const float* const d_logLuminance,
 }
 
 __global__
-void calculate_cdf(const float* const d_logLuminance,
-                   float const min, float const max, float const range,
-                   unsigned int* const d_cdf,  unsigned int* const d_hist,
-                   size_t const numBins,
-                   unsigned int const logLuminance_size)
+void init_hist_cfd_cuda(unsigned int* const d_cdf,
+                        unsigned int* const d_hist,
+                        size_t const numBins)
 {
   const int idx = threadIdx.x + blockIdx.x * blockDim.x;
-//  const int tid = threadIdx.x;
-  if (idx >= logLuminance_size) return;
-
   if (idx < numBins) {
     d_hist[idx] = 0;
     d_cdf[idx] = 0;
   }
+}
 
-  // Calculate Histogram
-  // bin = (lum[i] - lumMin) / lumRange * numBins
-  unsigned int bin = (d_logLuminance[idx] - min) / range * numBins;
-  if (bin < numBins) atomicAdd(&d_hist[bin], 1);
+__global__
+void cal_hist(const float* const d_logLuminance,
+              float const minLum, float const rangeLum,
+              unsigned int* const d_hist,
+              size_t const numBins,
+              unsigned int const logLuminance_size)
+{
+  const int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  if (idx < logLuminance_size){
+    // bin = (lum[i] - lumMin) / lumRange * numBins
+    unsigned long bin = (d_logLuminance[idx] - minLum) / rangeLum * numBins;
+    bin =  umin( bin , (unsigned long)(numBins - 1));
+    atomicAdd(&d_hist[bin], 1);
+  }
+}
 
-  __syncthreads();
-
+__global__
+void cal_cdf(unsigned int* const d_cdf,
+             const unsigned int* const d_hist,
+             size_t const numBins)
+{
+  const int idx = threadIdx.x + blockIdx.x * blockDim.x;
   // calculate the cfd
-  if (idx >= numBins) return;
-  for (int i = 0; i < idx; i++){
-    d_cdf[idx] += d_hist[i];
+  if (idx < numBins){
+    for (unsigned int i = 0; i < idx; i++){
+      d_cdf[idx] += d_hist[i];
+      //atomicAdd(&d_cdf[idx] , d_hist[i]);
+    }
   }
 }
 
@@ -200,11 +213,10 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
   dim3 blockWidth(maxThreadPerBlock);
   dim3 nOfBlocks(arraySize/maxThreadPerBlock);
   findMinMax<<<nOfBlocks,blockWidth,2*maxThreadPerBlock*sizeof(float)>>>(d_logLuminance,
-                                                                       d_Min,d_Max,
-                                                                       arraySize);
+                                                                         d_Min,d_Max,
+                                                                         arraySize);
   checkCudaErrors(cudaGetLastError());
   cudaDeviceSynchronize();
-  checkCudaErrors(cudaGetLastError());
   float h_min, h_max;
   cudaMemcpy(&h_min,d_Min,sizeof(float),cudaMemcpyDeviceToHost);
   cudaMemcpy(&h_max,d_Max,sizeof(float),cudaMemcpyDeviceToHost);
@@ -255,16 +267,29 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 
   // memory allocation for histogram:
   unsigned int* d_hist;
-  cudaMalloc((void **)&d_hist, sizeof (unsigned int) * numBins);
+  checkCudaErrors(cudaMalloc((void **)&d_hist, sizeof (unsigned int) * numBins));
 
   // generate the cumulative distribution funciton d_cdf
-  calculate_cdf<<<nOfBlocks,blockWidth>>>(d_logLuminance,
-                                          min_logLum,max_logLum,lumRange,
-                                          d_cdf,d_hist,
-                                          numBins,
-                                          arraySize);
-
+  dim3 blockWidth_Bins(maxThreadPerBlock);
+  dim3 nOfBlocks_Bins(numBins/maxThreadPerBlock);
+  init_hist_cfd_cuda<<<nOfBlocks_Bins,blockWidth_Bins>>>(d_cdf,
+                                                         d_hist,
+                                                         numBins);
   checkCudaErrors(cudaGetLastError());
   cudaDeviceSynchronize();
+
+  cal_hist<<<nOfBlocks,blockWidth>>>(d_logLuminance,
+                                     min_logLum,lumRange,
+                                     d_hist,
+                                     numBins,
+                                     arraySize);
   checkCudaErrors(cudaGetLastError());
+  cudaDeviceSynchronize();
+  cal_cdf<<<nOfBlocks_Bins,blockWidth_Bins>>>(d_cdf,
+                                              d_hist,
+                                              numBins);
+
+  cudaDeviceSynchronize();
+  checkCudaErrors(cudaGetLastError());
+  cudaFree(d_hist);
 }
