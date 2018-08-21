@@ -82,6 +82,7 @@
 #include "utils.h"
 #include "stdio.h"
 #include <float.h>
+#include <math.h>
 
 // sample of REDUCE pattern in CUDA for min and max operation
 __global__
@@ -150,11 +151,11 @@ void init_hist_cfd_cuda(unsigned int* const d_cdf,
 }
 
 __global__
-void cal_hist(const float* const d_logLuminance,
-              float const minLum, float const rangeLum,
-              unsigned int* const d_hist,
-              size_t const numBins,
-              unsigned int const logLuminance_size)
+void cal_hist_atomic(const float* const d_logLuminance,
+                     float const minLum, float const rangeLum,
+                     unsigned int* const d_hist,
+                     size_t const numBins,
+                     unsigned int const logLuminance_size)
 {
   const int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < logLuminance_size){
@@ -165,8 +166,81 @@ void cal_hist(const float* const d_logLuminance,
   }
 }
 
+
+/**
+ * @brief cal_hist_moreParallel
+ * @param d_logLuminance
+ * @param minLum
+ * @param rangeLum
+ * @param d_hist
+ * @param numBins
+ * @param logLuminance_size
+ *
+ * 1- each thread process numPix pixels and
+ * spread it over a local histogram of the thread.
+ * 2- reduce operation between local histograms
+ * to get the global histogram.
+ */
 __global__
-void cal_cdf(unsigned int* const d_cdf,
+void cal_hist_local(const float* const d_logLuminance,
+                    float const minLum, float const rangeLum,
+                    unsigned int* const d_hist,
+                    size_t const numBins,
+                    unsigned int const logLuminance_size,
+                    const unsigned int numPixels,
+                    unsigned int* const local_hists) // numbins * numberOfAllThreads
+{
+  const unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  const unsigned int startPixel = idx * numPixels;
+  const unsigned int endPixel = (idx+1) * numPixels;
+  const unsigned long num_all_threads = gridDim.x * blockDim.x;
+  const unsigned long local_hists_size = numBins * num_all_threads ;
+  unsigned int* lcl_hist = (unsigned int *)malloc(sizeof (unsigned int) * numBins);
+
+  for (int bin = 0; bin < numBins; bin++){
+    unsigned int index = idx + num_all_threads * bin;
+    local_hists[index] = 0;
+  }
+
+  // fill the local histograms
+  for (int i = startPixel; i < endPixel; i++){
+    unsigned long bin = (d_logLuminance[i] - minLum) / rangeLum * numBins;
+    bin =  umin( bin , (unsigned long)(numBins - 1));
+    unsigned int index = idx + num_all_threads * bin;
+    local_hists[index]++;
+  }
+
+  delete lcl_hist;
+}
+
+__global__
+void merge_local_hists(unsigned long st,
+                       unsigned int* const local_hists,
+                       size_t const numBins,
+                       unsigned long const numLocalHists,
+                       unsigned int* const d_hist){
+  const unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  if (idx < st){
+    for (unsigned int bin = 0; bin < numBins; bin++){
+      unsigned int index1 = idx + numLocalHists * bin;
+      unsigned int index2 = idx+st + numLocalHists * bin;
+      local_hists[index1] += local_hists[index2];
+    }
+  }
+  if(st == 1) { // last round
+    if (idx < numBins)
+    {
+      unsigned int index = numLocalHists * idx;
+      d_hist[idx] = local_hists[index];
+      //printf("%d, \n",local_hists[index]);
+    }
+  }
+}
+
+
+
+__global__
+void cal_cdf_serial(unsigned int* const d_cdf,
              const unsigned int* const d_hist,
              size_t const numBins)
 {
@@ -278,18 +352,50 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
   checkCudaErrors(cudaGetLastError());
   cudaDeviceSynchronize();
 
-  cal_hist<<<nOfBlocks,blockWidth>>>(d_logLuminance,
-                                     min_logLum,lumRange,
-                                     d_hist,
-                                     numBins,
-                                     arraySize);
-  checkCudaErrors(cudaGetLastError());
+//  cal_hist_atomic<<<nOfBlocks,blockWidth>>>(d_logLuminance,
+//                                            min_logLum,lumRange,
+//                                            d_hist,
+//                                            numBins,
+//                                            arraySize);
+
+  unsigned int numPixelsEachThread = 1024;
+  unsigned int numThreadsPerBlock = 1024;
+  unsigned int numBlocks = std::ceil( float(arraySize) / numPixelsEachThread / numThreadsPerBlock );
+
+  unsigned int* d_local_hists;
+  cudaMalloc((void **) &d_local_hists, numBins * numThreadsPerBlock * numBlocks * sizeof (unsigned int));
+  cal_hist_local<<< numBlocks,numThreadsPerBlock >>>(d_logLuminance,
+                                                     min_logLum,lumRange,
+                                                     d_hist,
+                                                     numBins,
+                                                     arraySize,
+                                                     numPixelsEachThread,
+                                                     d_local_hists);
   cudaDeviceSynchronize();
-  cal_cdf<<<nOfBlocks_Bins,blockWidth_Bins>>>(d_cdf,
-                                              d_hist,
-                                              numBins);
+  checkCudaErrors(cudaGetLastError());
+
+  unsigned long st = std::ceil(float(numThreadsPerBlock * numBlocks)/2);
+  while (st > 0)
+  {
+    // run the kernel
+    merge_local_hists<<< numBlocks, numThreadsPerBlock >>> (st,
+                                                            d_local_hists,
+                                                            numBins,
+                                                            numThreadsPerBlock * numBlocks,
+                                                            d_hist);
+    // sync all kernels
+    cudaDeviceSynchronize();
+    checkCudaErrors(cudaGetLastError());
+    if (st == 1) break;
+    st = std::ceil(float(st)/2);
+  }
+
+  cal_cdf_serial<<<nOfBlocks_Bins,blockWidth_Bins>>>(d_cdf,
+                                                     d_hist,
+                                                     numBins);
 
   cudaDeviceSynchronize();
   checkCudaErrors(cudaGetLastError());
   cudaFree(d_hist);
+  cudaFree(d_local_hists);
 }

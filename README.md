@@ -110,16 +110,18 @@ extern __shared__ float sharedData[];
 
 ### Exclusive/Inclusive Scan:
 Example:
-Imput:  1 2 3 4
-Operation: Add
-Output: 0 1 3 6 10
+```
+Input:  	1	2	3	4
+Operation: 	Exlusive Add
+Output: 	0	1	3	6
+```
 
 Inputs to SCAN:
 * Input Array
 * Binary Associative Operator
 * Identity Element
 
-Implementations:
+Algorithms:
 * Hillis/Steele Inclusive Scan: Step: log n, work: n*log n
 * Blelloch Scan: Step: 2*log n, work: 2*log n
 

@@ -115,10 +115,11 @@ int main(int argc, char **argv) {
 
   checkCudaErrors(cudaMemcpy(d_cdf, h_cdf, sizeof(unsigned int) * numBins, cudaMemcpyHostToDevice));
 
-  for( int i = 0; i < numBins; i++){
-    if (h_cdf[i] != h_cdf_gpu_res[i])
-      std::cout << i << ": " << "CPU: "  << h_cdf[i] << " GPU: " << h_cdf_gpu_res[i] << " Difference: " << h_cdf[i] - h_cdf_gpu_res[i] << std::endl;
-  }
+  // For Debugging
+//  for( int i = 0; i < numBins; i++){
+//    if (h_cdf[i] != h_cdf_gpu_res[i])
+//      std::cout << i << ": " << "CPU: "  << h_cdf[i] << " GPU: " << h_cdf_gpu_res[i] << " Difference: " << h_cdf[i] - h_cdf_gpu_res[i] << std::endl;
+//  }
   delete h_cdf_gpu_res;
   //check results and output the tone-mapped image
   postProcess(reference_file, numRows, numCols, min_logLum, max_logLum);

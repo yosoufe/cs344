@@ -30,4 +30,5 @@ CMakeLists.txt.user
 
 **/CMakeFiles
 **/Project.cbp
-
+*.autosave
+**/*.autosave
